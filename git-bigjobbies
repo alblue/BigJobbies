@@ -46,6 +46,7 @@ Add()
 		local GITFILE=${FULL:LEN+1}
 		# It's a hash brown, in case anyone's wondering
 		local BROWN=`git hash-object -t blob -w $FULL`
+		touch $BIGJOBBIES
                 egrep -v "^.{41}${GITFILE}$" $BIGJOBBIES > $BIGJOBBIES~
 		echo $BROWN $GITFILE >> $BIGJOBBIES~
 		mv $BIGJOBBIES~ $BIGJOBBIES
