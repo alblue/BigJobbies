@@ -1,0 +1,113 @@
+#!/bin/bash
+# Created by Alex Blewitt <alex.blewitt@gmail.com>
+# 
+# Demonstration of how to create a git extension, and provide
+# a demonstration (i.e. not for real use) version of Mercurial's
+# 'large files' command. Called 'bigjobbies' and should be pronounced
+# as per Billy Conolly's interpretation.
+#
+# Licensed under the Apace License 2.0
+# http://www.apache.org/licenses/LICENSE-2.0.html
+#
+# This has many known issues, not the least of which is that 
+# partial checkouts like this are against the principle of DVCS
+# in the first place. As well as that, we have:
+#
+# * Assumes 'origin' is the upstream to fetch from
+# * Very little error checking if objects cannot be found
+# * No means to add a small normally vs above threshold limit
+# * No integration with ordinary 'git add' tools
+# * No warning when uncommitted changes to large jobbies exist
+# * The concept is impractical
+
+GIT_BJ_DIR=`pwd .`
+
+while [ ! -d "$GIT_BJ_DIR/.git" ]
+do
+	if [ "$GIT_BJ_DIR" = "/"  ]
+	then
+		echo "fatal: Not a git repository (or any of the parent directories): .git"
+		exit 128
+	fi
+	GIT_BJ_DIR=`dirname $GIT_BJ_DIR`
+done
+
+BIGJOBBIES="$GIT_BJ_DIR/.bigjobbies"
+IGNORE="$GIT_BJ_DIR/.gitignore"
+REFS="$GIT_BJ_DIR/.git/refs/bigjobbies"
+
+Add() 
+{
+	local PWD=`pwd`
+	for file in $*
+	do
+		local FULL="$PWD/$file"
+		local LEN=${#GIT_BJ_DIR}
+		local GITFILE=${FULL:LEN+1}
+		# It's a hash brown, in case anyone's wondering
+		local BROWN=`git hash-object -t blob -w $FULL`
+                egrep -v "^.{41}${GITFILE}$" $BIGJOBBIES > $BIGJOBBIES~
+		echo $BROWN $GITFILE >> $BIGJOBBIES~
+		mv $BIGJOBBIES~ $BIGJOBBIES
+		# TODO Check this isn't already present
+		egrep -qs '^'$GITFILE'$' $IGNORE || echo $GITFILE >> $GIT_BJ_DIR/.gitignore
+		[ -d $REFS ] || mkdir $REFS
+		echo $BROWN > $REFS/$BROWN
+	done
+	cat $BIGJOBBIES | sort -u > .bigjobbies~
+	mv .bigjobbies~ .bigjobbies
+}
+
+Rm() 
+{
+	# Remove from gitignore and bigjobbies
+	# We can't remove the tag w/o all known repos
+	local PWD=`pwd`
+	for file in $*
+	do
+		local FULL="$PWD/$file"
+		local LEN=${#GIT_BJ_DIR}
+		local GITFILE=${FULL:LEN+1}
+		egrep -v "^.{41}${GITFILE}$" $BIGJOBBIES > $BIGJOBBIES~
+		mv $BIGJOBBIES~ $BIGJOBBIES	
+		egrep -v '^'$GITFILE'$' $IGNORE > $IGNORE~
+		mv $IGNORE~ $IGNORE	
+	done
+}
+
+Mv() 
+{
+	Rm $1
+	mv $1 $2
+	Add $2
+}
+
+Resolve() 
+{
+	if [ -f $BIGJOBBIES ]
+	then
+		while read HASH FILE
+		do
+			git cat-file -e $HASH || git fetch -q origin refs/bigjobbies/$HASH:refs/bigjobbies/$HASH
+			git show $HASH > $FILE
+		done < $BIGJOBBIES
+	fi
+}
+
+Usage() 
+{
+	echo "Usage:"
+	echo " 	git bigjobbies add bigfile ..."
+	echo " 	git bigjobbies rm bigfile ..."
+	echo " 	git bigjobbies mv bigfile newlocation"
+	echo " 	git bigjobbies resolve"
+}
+
+case $1 in
+	add) 	shift; Add $*;;
+	rm)	shift; Rm $*;;
+	resolve) shift; Resolve;;
+	resolveOne) shift; ResolveOne;;
+	mv) shift; Mv $*;;
+	*)	Usage;;
+esac	
