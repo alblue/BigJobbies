@@ -90,7 +90,7 @@ Resolve()
 		while read HASH FILE
 		do
 			git cat-file -e $HASH || git fetch -q origin refs/bigjobbies/$HASH:refs/bigjobbies/$HASH
-			git show $HASH > $FILE
+			git show $HASH > $GIT_BJ_DIR/$FILE
 		done < $BIGJOBBIES
 	fi
 }
